@@ -586,14 +586,50 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  let plates = JSON.parse(localStorage.getItem('plates') || '[]');
+  const FB_URL = "https://plates-4d6cf-default-rtdb.firebaseio.com";
+
+  let plates = [];
+
+  // Load from Firebase on start
+  async function loadFromFirebase() {
+    try {
+      const res = await fetch(FB_URL + "/plates.json");
+      const data = await res.json();
+      if (data) {
+        plates = Array.isArray(data) ? data : Object.values(data);
+      } else {
+        plates = [];
+      }
+      updateCount();
+      renderPlates(plates);
+    } catch(e) {
+      console.error("Firebase load error:", e);
+      plates = JSON.parse(localStorage.getItem('plates') || '[]');
+      updateCount();
+      renderPlates(plates);
+    }
+  }
+
+  // Save to Firebase
+  async function saveToFirebase() {
+    try {
+      await fetch(FB_URL + "/plates.json", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(plates)
+      });
+      localStorage.setItem('plates', JSON.stringify(plates));
+    } catch(e) {
+      console.error("Firebase save error:", e);
+      localStorage.setItem('plates', JSON.stringify(plates));
+    }
+  }
   let activeFilter = 'all';
   let apiKey = localStorage.getItem('geminiKey') || '';
 
   // Init
   if (apiKey) document.getElementById('apiKeyInput').value = apiKey;
-  updateCount();
-  renderPlates(plates);
+  loadFromFirebase();
 
   async function testApiKey() {
     const key = document.getElementById("apiKeyInput").value.trim();
@@ -811,10 +847,10 @@
     navigator.clipboard.writeText(phone).then(() => showToast('✅ تم نسخ الرقم'));
   }
 
-  function deletePlate(index) {
+  async function deletePlate(index) {
     if (!confirm('تبي تحذف هذه اللوحة؟')) return;
     plates.splice(index, 1);
-    localStorage.setItem('plates', JSON.stringify(plates));
+    await saveToFirebase();
     updateCount();
     doSearch();
     showToast('🗑️ تم الحذف');
